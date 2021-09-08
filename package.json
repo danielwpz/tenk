@@ -5,7 +5,7 @@
   "scripts": {
     "pretest": "yarn build:contract",
     "build:contract": "./build.sh",
-    "test": "jest",
+    "test": "npm run pretest && jest",
     "test:testnet": "NEAR_RUNNER_NETWORK=testnet jest",
     "test:unit": "cargo test"
   },
@@ -16,7 +16,6 @@
     "eslint": "^7.29.0",
     "jest": "^27.0.6",
     "near-api-js": "^0.41.0",
-    "near-runner": "^0.4.0",
     "node-fetch": "^2.6.1",
     "ts-jest": "^27.0.4",
     "typescript": "^4.3.5"

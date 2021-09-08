@@ -98,11 +98,12 @@ impl Contract {
                 reference_hash: None,
             },
             linkdrop_contract,
+            5
         )
     }
 
     #[init]
-    pub fn new(owner_id: AccountId, metadata: NFTContractMetadata, network_id: String) -> Self {
+    pub fn new(owner_id: AccountId, metadata: NFTContractMetadata, network_id: String, size: u64) -> Self {
         assert!(!env::state_exists(), "Already initialized");
         metadata.assert_valid();
         Self {
@@ -114,7 +115,7 @@ impl Contract {
                 Some(StorageKey::Approval),
             ),
             metadata: LazyOption::new(StorageKey::Metadata, Some(&metadata)),
-            raffle: Raffle::new(StorageKey::Ids, 5),
+            raffle: Raffle::new(StorageKey::Ids, size),
             pending_tokens: 0,
             linkdrop_contract: network_id,
             accounts: LookupMap::new(StorageKey::LinkdropKeys),
@@ -123,13 +124,11 @@ impl Contract {
 
     #[payable]
     pub fn nft_mint(
-        &mut self,
-        _token_id: TokenId,
-        _token_owner_id: AccountId,
-        _token_metadata: TokenMetadata,
+        &mut self
     ) -> Token {
        self.nft_mint_one()
     }
+
     #[payable]
     pub fn create_linkdrop(&mut self, public_key: PublicKey) -> Promise {
         self.assert_can_mint(1);
