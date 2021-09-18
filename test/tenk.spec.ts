@@ -45,7 +45,6 @@ describe("NFT Tenk", () => {
             attachedDeposit: '7020000000000000000000'
           }
         );
-        console.log(nft.token_id);
         expect(nft.token_id).toBeTruthy();
         expect(nft.owner_id).toBe(alice.accountId);
         expect(ids).not.toContain(nft.token_id);
@@ -69,6 +68,16 @@ describe("NFT Tenk", () => {
         throwed = true;
       }
       expect(throwed).toBeTruthy();
+
+      // enum
+      const tokens = await alice.call(
+        contract,
+        'nft_tokens_for_owner',
+        {
+          account_id: alice.accountId
+        }
+      );
+      expect(tokens.length).toBe(5);
 
     });
   });

@@ -31,18 +31,9 @@ pub struct Contract {
     pub accounts: LookupMap<PublicKey, Action>,
 }
 
-const GAS_REQUIRED_FOR_LINKDROP: Gas = Gas(20_000_000_000_000);
-
-// const BASE_COST: Balance = to_yocto("10");
-const SUPPLY_FATOR_NUMERATOR: Balance = 110_000_000_000_000_000_000_000;
-const SUPPLY_FATOR_DENOMENTOR: Balance = 100_000_000_000_000_000_000_000;
-
-// fn cost_per_token(num: u32) -> Balance {
-//     (num - 1 as Balance) * SUPPLY_FATOR_NUMERATOR / SUPPLY_FATOR_DENOMENTOR
-// }
-
+// constant const
 fn total_cost(num: u32) -> Balance {
-    to_yocto("10") - (num - 1) as Balance * SUPPLY_FATOR_NUMERATOR / SUPPLY_FATOR_DENOMENTOR
+    to_yocto("10") * num as Balance
 }
 
 fn assert_deposit(num: u32) {
@@ -130,21 +121,6 @@ impl Contract {
     }
 
     #[payable]
-    pub fn create_linkdrop(&mut self, public_key: PublicKey) -> Promise {
-        self.assert_can_mint(1);
-        self.pending_tokens += 1;
-        let current_account_id = env::current_account_id();
-        ext_self::send_with_callback(
-            public_key,
-            current_account_id.clone(),
-            GAS_REQUIRED_FOR_LINKDROP,
-            &current_account_id,
-            env::attached_deposit(),
-            GAS_REQUIRED_FOR_LINKDROP * 2,
-        )
-    }
-
-    #[payable]
     pub fn nft_mint_one(&mut self) -> Token {
         self.assert_can_mint(1);
         self.internal_mint(env::signer_account_id())
@@ -188,46 +164,46 @@ impl Contract {
         let token_id = id.to_string();
         // TODO: figure out how to use internals
         // self.tokens.mint(token_id, token_owner_id, token_metadata);
-          let initial_storage_usage = env::storage_usage();
-          // assert_eq!(env::predecessor_account_id(), self.owner_id, "Unauthorized");
-          // if self.tokens.token_metadata_by_id.is_some() && token_metadata.is_none() {
-          //     env::panic(b"Must provide metadata");
-          // }
-          // if self.tokens.owner_by_id.get(&token_id).is_some() {
-          //     env::panic(b"token_id must be unique");
-          // }
-  
-          let owner_id: AccountId = token_owner_id;
-  
-          // Core behavior: every token must have an owner
-          self.tokens.owner_by_id.insert(&token_id, &owner_id);
-  
-          // Metadata extension: Save metadata, keep variable around to return later.
-          // Note that check above already panicked if metadata extension in use but no metadata
-          // provided to call.
-          self.tokens.token_metadata_by_id
-              .as_mut()
-              .and_then(|by_id| by_id.insert(&token_id, &token_metadata.as_ref().unwrap()));
-  
-          // Enumeration extension: Record tokens_per_owner for use with enumeration view methods.
-          if let Some(tokens_per_owner) = &mut self.tokens.tokens_per_owner {
-              let mut token_ids = tokens_per_owner.get(&owner_id).unwrap_or_else(|| {
-                  UnorderedSet::new(StorageKey::TokensPerOwner {
-                      account_hash: env::sha256(owner_id.as_bytes()),
-                  })
-              });
-              token_ids.insert(&token_id);
-              tokens_per_owner.insert(&owner_id, &token_ids);
-          }
-    
-            // Approval Management extension: return empty HashMap as part of Token
-            let approved_account_ids =
-                if self.tokens.approvals_by_id.is_some() { Some(HashMap::new()) } else { None };
-    
-            // Return any extra attached deposit not used for storage
-            refund_deposit(env::storage_usage() - initial_storage_usage);
-    
-            Token { token_id, owner_id, metadata: token_metadata, approved_account_ids }
+        let initial_storage_usage = env::storage_usage();
+        // assert_eq!(env::predecessor_account_id(), self.owner_id, "Unauthorized");
+        // if self.tokens.token_metadata_by_id.is_some() && token_metadata.is_none() {
+        //     env::panic(b"Must provide metadata");
+        // }
+        // if self.tokens.owner_by_id.get(&token_id).is_some() {
+        //     env::panic(b"token_id must be unique");
+        // }
+
+        let owner_id: AccountId = token_owner_id;
+
+        // Core behavior: every token must have an owner
+        self.tokens.owner_by_id.insert(&token_id, &owner_id);
+
+        // Metadata extension: Save metadata, keep variable around to return later.
+        // Note that check above already panicked if metadata extension in use but no metadata
+        // provided to call.
+        self.tokens.token_metadata_by_id
+            .as_mut()
+            .and_then(|by_id| by_id.insert(&token_id, &token_metadata.as_ref().unwrap()));
+
+        // Enumeration extension: Record tokens_per_owner for use with enumeration view methods.
+        if let Some(tokens_per_owner) = &mut self.tokens.tokens_per_owner {
+            let mut token_ids = tokens_per_owner.get(&owner_id).unwrap_or_else(|| {
+                UnorderedSet::new(StorageKey::TokensPerOwner {
+                    account_hash: env::sha256(owner_id.as_bytes()),
+                })
+            });
+            token_ids.insert(&token_id);
+            tokens_per_owner.insert(&owner_id, &token_ids);
+        }
+
+        // Approval Management extension: return empty HashMap as part of Token
+        let approved_account_ids =
+            if self.tokens.approvals_by_id.is_some() { Some(HashMap::new()) } else { None };
+
+        // Return any extra attached deposit not used for storage
+        refund_deposit(env::storage_usage() - initial_storage_usage);
+
+        Token { token_id, owner_id, metadata: token_metadata, approved_account_ids }
     }
 
     fn create_metadata(&mut self, token_id: u64) -> TokenMetadata {
