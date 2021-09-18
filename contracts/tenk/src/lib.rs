@@ -18,6 +18,8 @@ use action::Action;
 pub mod linkdrop;
 use linkdrop::*;
 
+const MIN_STORAGE_DEPOSIT: Balance = 7_020_000_000_000_000_000_000;
+
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
 pub struct Contract {
@@ -26,22 +28,12 @@ pub struct Contract {
     // Vector of available NFTs
     raffle: Raffle,
     pending_tokens: u32,
+    unit_price: String,
     // Linkdrop fields will be removed once proxy contract is deployed
     pub linkdrop_contract: String,
     pub accounts: LookupMap<PublicKey, Action>,
 }
 
-// constant const
-fn total_cost(num: u32) -> Balance {
-    to_yocto("10") * num as Balance
-}
-
-fn assert_deposit(num: u32) {
-    assert!(
-        env::attached_deposit() >= total_cost(num),
-        "Not enough attached deposit to buy"
-    );
-}
 
 #[ext_contract(ext_self)]
 trait Linkdrop {
@@ -76,6 +68,7 @@ impl Contract {
         symbol: String,
         uri: String,
         linkdrop_contract: String,
+        unit_price: String,
     ) -> Self {
         Self::new(
             owner_id,
@@ -89,13 +82,24 @@ impl Contract {
                 reference_hash: None,
             },
             linkdrop_contract,
+            unit_price,
             5
         )
     }
 
     #[init]
-    pub fn new(owner_id: AccountId, metadata: NFTContractMetadata, network_id: String, size: u64) -> Self {
+    pub fn new(
+        owner_id: AccountId, 
+        metadata: NFTContractMetadata, 
+        network_id: String, 
+        unit_price: String,
+        size: u64
+    ) -> Self {
         assert!(!env::state_exists(), "Already initialized");
+        assert!(
+            to_yocto(&unit_price) >= MIN_STORAGE_DEPOSIT,
+            "Unit price is set too low"
+        );
         metadata.assert_valid();
         Self {
             tokens: NonFungibleToken::new(
@@ -108,9 +112,14 @@ impl Contract {
             metadata: LazyOption::new(StorageKey::Metadata, Some(&metadata)),
             raffle: Raffle::new(StorageKey::Ids, size),
             pending_tokens: 0,
+            unit_price: unit_price,
             linkdrop_contract: network_id,
             accounts: LookupMap::new(StorageKey::LinkdropKeys),
         }
+    }
+
+    pub fn unit_price(&self) -> String {
+        return self.unit_price.clone();
     }
 
     #[payable]
@@ -147,6 +156,18 @@ impl Contract {
 
     // Private methods
 
+    fn total_cost(&self, num: u32) -> Balance {
+        to_yocto(&self.unit_price) * num as Balance
+    }
+
+    fn assert_deposit(&self, num: u32) {
+        assert!(
+            env::attached_deposit() == self.total_cost(num),
+            "Must attach exact {} NEAR",
+            self.unit_price()
+        );
+    }
+
     fn assert_can_mint(&self, num: u32) {
         // Check quantity
         assert!(self.raffle.len() as u32 >= self.pending_tokens + num , "No NFTs left to mint");
@@ -154,7 +175,7 @@ impl Contract {
         if env::signer_account_id() == self.tokens.owner_id {
           return;
         }
-        assert_deposit(num);
+        self.assert_deposit(num);
     }
 
     // Currently have to copy the internals of mint because it requires that only the owner can mint
@@ -164,7 +185,7 @@ impl Contract {
         let token_id = id.to_string();
         // TODO: figure out how to use internals
         // self.tokens.mint(token_id, token_owner_id, token_metadata);
-        let initial_storage_usage = env::storage_usage();
+
         // assert_eq!(env::predecessor_account_id(), self.owner_id, "Unauthorized");
         // if self.tokens.token_metadata_by_id.is_some() && token_metadata.is_none() {
         //     env::panic(b"Must provide metadata");
@@ -200,8 +221,9 @@ impl Contract {
         let approved_account_ids =
             if self.tokens.approvals_by_id.is_some() { Some(HashMap::new()) } else { None };
 
-        // Return any extra attached deposit not used for storage
-        refund_deposit(env::storage_usage() - initial_storage_usage);
+        // no need to refund deposit since its covered by the payment
+
+        // TODO log!
 
         Token { token_id, owner_id, metadata: token_metadata, approved_account_ids }
     }
@@ -266,20 +288,4 @@ fn to_yocto(value: &str) -> u128 {
     } else {
         part1
     }
-}
-
-fn refund_deposit(storage_used: u64) {
-  let required_cost = env::storage_byte_cost() * Balance::from(storage_used);
-  let attached_deposit = env::attached_deposit();
-
-  assert!(
-      required_cost <= attached_deposit,
-      "Must attach {} yoctoNEAR to cover storage",
-      required_cost,
-  );
-
-  let refund = attached_deposit - required_cost;
-  if refund > 1 {
-      Promise::new(env::predecessor_account_id()).transfer(refund);
-  }
 }

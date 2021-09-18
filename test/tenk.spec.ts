@@ -5,15 +5,16 @@ describe("NFT Tenk", () => {
   jest.setTimeout(60_000);
 
   const runner = Runner.create(async ({ root }) => {
-    const alice = await root.createAccount("alice");
+    const alice = await root.createAccount('alice');
+    const bob = await root.createAccount('bob');
     const contract = await root.createAndDeploy(
       "tenk-nft",
       path.join(__dirname, "..", "res", "tenk.wasm")
     );
-    return { alice, contract };
+    return { alice, bob, contract };
   });
 
-  test.concurrent('Mint', async () => {
+  test.concurrent('Mint by Owner', async () => {
     const r = await runner;
     await r.run(async ({ alice, contract }) => {
       await alice.call(
@@ -24,6 +25,7 @@ describe("NFT Tenk", () => {
           name: 'foo nft',
           symbol: 'FOO',
           uri: 'https://nft.com',
+          unit_price: '10',
           linkdrop_contract: ''
         }
       );
@@ -81,4 +83,55 @@ describe("NFT Tenk", () => {
 
     });
   });
+
+  test.concurrent('Mint by Other', async () => {
+    const r = await runner;
+    await r.run(async (context) => {
+      const { alice, bob, contract } = context;
+      await alice.call(
+        contract,
+        'new_default_meta',
+        {
+          owner_id: alice.accountId,
+          name: 'foo nft',
+          symbol: 'FOO',
+          uri: 'https://nft.com',
+          unit_price: '10',
+          linkdrop_contract: ''
+        }
+      );
+
+      const nft = await bob.call(
+        contract,
+        'nft_mint',
+        {},
+        {
+          gas: tGas('20'),
+          attachedDeposit: '10000000000000000000000000'
+        }
+      )
+      expect(nft.token_id).toBeTruthy();
+      expect(nft.owner_id).toBe(bob.accountId);
+
+      // no enough deposit
+      let throwed = false;
+      try {
+        await bob.call(
+          contract,
+          'nft_mint',
+          {},
+          {
+            gas: tGas('20'),
+            attachedDeposit: '9000000000000000000000000'
+          }
+        );
+      } catch (err) {
+        throwed = true;
+        console.log(err);
+      }
+      expect(throwed).toBeTruthy();
+
+    });
+  })
+
 });
