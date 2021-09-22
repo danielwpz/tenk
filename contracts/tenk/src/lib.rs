@@ -7,7 +7,7 @@ use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::{LazyOption, LookupMap, UnorderedSet};
 use near_sdk::{
     env, ext_contract, near_bindgen, AccountId, Balance, BorshStorageKey, Gas, PanicOnDefault,
-    Promise, PromiseOrValue, PromiseResult, PublicKey,
+    Promise, PromiseOrValue, PublicKey,
 };
 
 mod raffle;
@@ -27,6 +27,7 @@ pub struct Contract {
     metadata: LazyOption<NFTContractMetadata>,
     // Vector of available NFTs
     raffle: Raffle,
+    total_supply: u64,
     pending_tokens: u32,
     unit_price: String,
     // Linkdrop fields will be removed once proxy contract is deployed
@@ -111,6 +112,7 @@ impl Contract {
             ),
             metadata: LazyOption::new(StorageKey::Metadata, Some(&metadata)),
             raffle: Raffle::new(StorageKey::Ids, size),
+            total_supply: size,
             pending_tokens: 0,
             unit_price: unit_price,
             linkdrop_contract: network_id,
@@ -118,9 +120,21 @@ impl Contract {
         }
     }
 
+    // -- view methods
+
     pub fn unit_price(&self) -> String {
         return self.unit_price.clone();
     }
+
+    pub fn total_supply(&self) -> u64 {
+        return self.total_supply;
+    }
+
+    pub fn remaining_count(&self) -> u64 {
+       return self.total_supply - self.raffle.len();
+    }
+
+    // -- mint methods
 
     #[payable]
     pub fn nft_mint(
@@ -143,18 +157,7 @@ impl Contract {
             .collect::<Vec<Token>>()
     }
 
-    #[payable]
-    #[private]
-    pub fn link_callback(&mut self, account_id: AccountId) -> Token {
-        if is_promise_success() {
-            self.pending_tokens -= 1;
-            self.internal_mint(account_id)
-        } else {
-            env::panic(b"Promise before Linkdrop callback failed");
-        }
-    }
-
-    // Private methods
+    // -- Private methods
 
     fn total_cost(&self, num: u32) -> Balance {
         to_yocto(&self.unit_price) * num as Balance
@@ -263,18 +266,6 @@ near_contract_standards::impl_non_fungible_token_enumeration!(Contract, tokens);
 impl NonFungibleTokenMetadataProvider for Contract {
     fn nft_metadata(&self) -> NFTContractMetadata {
         self.metadata.get().unwrap()
-    }
-}
-
-fn is_promise_success() -> bool {
-    assert_eq!(
-        env::promise_results_count(),
-        1,
-        "Contract expected a result on the callback"
-    );
-    match env::promise_result(0) {
-        PromiseResult::Successful(_) => true,
-        _ => false,
     }
 }
 

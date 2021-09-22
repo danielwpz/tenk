@@ -127,7 +127,6 @@ describe("NFT Tenk", () => {
         );
       } catch (err) {
         throwed = true;
-        console.log(err);
       }
       expect(throwed).toBeTruthy();
 
