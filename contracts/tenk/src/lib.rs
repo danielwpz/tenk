@@ -4,19 +4,14 @@ use near_contract_standards::non_fungible_token::metadata::{
 use near_contract_standards::non_fungible_token::{NonFungibleToken};
 use near_contract_standards::non_fungible_token::{Token, TokenId};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
-use near_sdk::collections::{LazyOption, LookupMap, UnorderedSet};
+use near_sdk::collections::{LazyOption, UnorderedSet};
 use near_sdk::{
-    env, ext_contract, near_bindgen, AccountId, Balance, BorshStorageKey, Gas, PanicOnDefault,
+    env, ext_contract, near_bindgen, AccountId, Balance, BorshStorageKey, PanicOnDefault,
     Promise, PromiseOrValue, PublicKey,
 };
 
 mod raffle;
 use raffle::Raffle;
-mod action;
-use action::Action;
-
-pub mod linkdrop;
-use linkdrop::*;
 
 const MIN_STORAGE_DEPOSIT: Balance = 7_020_000_000_000_000_000_000;
 
@@ -30,9 +25,6 @@ pub struct Contract {
     total_supply: u64,
     pending_tokens: u32,
     unit_price: String,
-    // Linkdrop fields will be removed once proxy contract is deployed
-    pub linkdrop_contract: String,
-    pub accounts: LookupMap<PublicKey, Action>,
 }
 
 
@@ -56,7 +48,6 @@ enum StorageKey {
     Enumeration,
     Approval,
     Ids,
-    LinkdropKeys,
     TokensPerOwner { account_hash: Vec<u8> },
 }
 
@@ -68,7 +59,6 @@ impl Contract {
         name: String,
         symbol: String,
         uri: String,
-        linkdrop_contract: String,
         unit_price: String,
     ) -> Self {
         Self::new(
@@ -82,7 +72,6 @@ impl Contract {
                 reference: None,
                 reference_hash: None,
             },
-            linkdrop_contract,
             unit_price,
             5
         )
@@ -92,7 +81,6 @@ impl Contract {
     pub fn new(
         owner_id: AccountId, 
         metadata: NFTContractMetadata, 
-        network_id: String, 
         unit_price: String,
         size: u64
     ) -> Self {
@@ -115,8 +103,6 @@ impl Contract {
             total_supply: size,
             pending_tokens: 0,
             unit_price: unit_price,
-            linkdrop_contract: network_id,
-            accounts: LookupMap::new(StorageKey::LinkdropKeys),
         }
     }
 
