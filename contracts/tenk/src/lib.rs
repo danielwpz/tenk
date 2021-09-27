@@ -1,14 +1,19 @@
 use near_contract_standards::non_fungible_token::metadata::{
     NFTContractMetadata, NonFungibleTokenMetadataProvider, TokenMetadata, NFT_METADATA_SPEC,
 };
+use near_contract_standards::non_fungible_token::core::{
+    NonFungibleTokenCore, NonFungibleTokenResolver,
+};
 use near_contract_standards::non_fungible_token::{NonFungibleToken};
 use near_contract_standards::non_fungible_token::{Token, TokenId};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::{LazyOption, UnorderedSet};
 use near_sdk::{
     env, ext_contract, near_bindgen, AccountId, Balance, BorshStorageKey, PanicOnDefault,
-    Promise, PromiseOrValue, PublicKey,
+    Promise, PublicKey, PromiseOrValue, serde_json::json
 };
+use std::collections::HashMap;
+
 
 mod raffle;
 use raffle::Raffle;
@@ -119,9 +124,12 @@ impl Contract {
     pub fn remaining_count(&self) -> u64 {
        return self.total_supply - self.raffle.len();
     }
+}
 
-    // -- mint methods
+// -- mint related methods
 
+#[near_bindgen]
+impl Contract {
     #[payable]
     pub fn nft_mint(
         &mut self
@@ -133,14 +141,6 @@ impl Contract {
     pub fn nft_mint_one(&mut self) -> Token {
         self.assert_can_mint(1);
         self.internal_mint(env::signer_account_id())
-    }
-
-    #[payable]
-    pub fn nft_mint_many(&mut self, num: u32) -> Vec<Token> {
-        self.assert_can_mint(num);
-        (0..num)
-            .map(|_| self.internal_mint(env::signer_account_id()))
-            .collect::<Vec<Token>>()
     }
 
     // -- Private methods
@@ -244,7 +244,79 @@ impl Contract {
     }
 }
 
-near_contract_standards::impl_non_fungible_token_core!(Contract, tokens);
+// -- NEP171 core
+// need to override default impl to have customized logging
+#[near_bindgen]
+impl NonFungibleTokenCore for Contract {
+    #[payable]
+    fn nft_transfer(
+        &mut self,
+        receiver_id: AccountId,
+        token_id: TokenId,
+        approval_id: Option<u64>,
+        memo: Option<String>,
+    ) {
+        self.tokens.nft_transfer(receiver_id.clone(), token_id.clone(), approval_id, memo);
+        env::log_str(
+            &json!({
+                "type": "nft_transfer",
+                "params": {
+                    "token_id": token_id,
+                    "sender_id": "",
+                    "receiver_id": receiver_id,
+                }
+            })
+            .to_string()
+        );
+    }
+
+    #[payable]
+    fn nft_transfer_call(
+        &mut self,
+        receiver_id: AccountId,
+        token_id: TokenId,
+        approval_id: Option<u64>,
+        memo: Option<String>,
+        msg: String,
+    ) -> PromiseOrValue<bool> {
+        let result = self.tokens.nft_transfer_call(receiver_id.clone(), token_id.clone(), approval_id, memo, msg);
+        env::log_str(
+            &json!({
+                "type": "nft_transfer",
+                "params": {
+                    "token_id": token_id,
+                    "sender_id": "",
+                    "receiver_id": receiver_id,
+                }
+            })
+            .to_string()
+        );
+
+        return result;
+    }
+
+    fn nft_token(&self, token_id: TokenId) -> Option<Token> {
+        self.tokens.nft_token(token_id)
+    }
+}
+
+impl NonFungibleTokenResolver for Contract {
+    fn nft_resolve_transfer(
+        &mut self,
+        previous_owner_id: AccountId,
+        receiver_id: AccountId,
+        token_id: TokenId,
+        approved_account_ids: Option<HashMap<AccountId, u64>>,
+    ) -> bool {
+        self.tokens.nft_resolve_transfer(
+            previous_owner_id,
+            receiver_id,
+            token_id,
+            approved_account_ids,
+        )
+    }
+}
+
 near_contract_standards::impl_non_fungible_token_approval!(Contract, tokens);
 near_contract_standards::impl_non_fungible_token_enumeration!(Contract, tokens);
 

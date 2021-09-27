@@ -6,8 +6,7 @@
 
 [workspace]
 members = [
-  "contracts/tenk",
-  "contracts/sandbox-linkdrop"
+  "contracts/tenk"
 ]
 
 [profile.release]
@@ -17,4 +16,3 @@ lto = true
 debug = false
 panic = "abort"
 overflow-checks = true
-
