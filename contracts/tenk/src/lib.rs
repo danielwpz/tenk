@@ -257,12 +257,13 @@ impl NonFungibleTokenCore for Contract {
         memo: Option<String>,
     ) {
         self.tokens.nft_transfer(receiver_id.clone(), token_id.clone(), approval_id, memo);
+        let owner_id = self.tokens.owner_by_id.get(&token_id).unwrap();
         env::log_str(
             &json!({
                 "type": "nft_transfer",
                 "params": {
                     "token_id": token_id,
-                    "sender_id": "",
+                    "sender_id": owner_id,
                     "receiver_id": receiver_id,
                 }
             })
@@ -279,20 +280,7 @@ impl NonFungibleTokenCore for Contract {
         memo: Option<String>,
         msg: String,
     ) -> PromiseOrValue<bool> {
-        let result = self.tokens.nft_transfer_call(receiver_id.clone(), token_id.clone(), approval_id, memo, msg);
-        env::log_str(
-            &json!({
-                "type": "nft_transfer",
-                "params": {
-                    "token_id": token_id,
-                    "sender_id": "",
-                    "receiver_id": receiver_id,
-                }
-            })
-            .to_string()
-        );
-
-        return result;
+        self.tokens.nft_transfer_call(receiver_id.clone(), token_id.clone(), approval_id, memo, msg)
     }
 
     fn nft_token(&self, token_id: TokenId) -> Option<Token> {
@@ -308,12 +296,29 @@ impl NonFungibleTokenResolver for Contract {
         token_id: TokenId,
         approved_account_ids: Option<HashMap<AccountId, u64>>,
     ) -> bool {
-        self.tokens.nft_resolve_transfer(
+        let transferred = self.tokens.nft_resolve_transfer(
             previous_owner_id,
             receiver_id,
             token_id,
             approved_account_ids,
-        )
+        );
+
+        if transferred {
+            // transfer was reverted, need to log
+            env::log_str(
+                &json!({
+                    "type": "nft_transfer",
+                    "params": {
+                        "token_id": token_id,
+                        "sender_id": previous_owner_id,
+                        "receiver_id": receiver_id,
+                    }
+                })
+                .to_string()
+            );
+        };
+
+        return transferred;
     }
 }
 
