@@ -304,7 +304,6 @@ impl NonFungibleTokenResolver for Contract {
         );
 
         if transferred {
-            // transfer was reverted, need to log
             env::log_str(
                 &json!({
                     "type": "nft_transfer",
